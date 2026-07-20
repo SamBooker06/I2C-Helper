@@ -13,7 +13,7 @@ class I2CDevice:
     """
     def __init__(self, device_address: int, driver: I2CDriver):
         self.device_address = device_address
-        self._driver = driver
+        self.driver = driver
 
     def read(self, address: int, *, buffer_size: int = 4, memory_address_size: int = 2) -> bytes:
         """
@@ -28,8 +28,8 @@ class I2CDevice:
         :return: The bytes read from the specified memory address.
         :rtype: bytes
         """
-        return self._driver.read(self.device_address, address, buffer_size=buffer_size,
-                                 memory_address_size=memory_address_size)
+        return self.driver.read(self.device_address, address, buffer_size=buffer_size,
+                                memory_address_size=memory_address_size)
 
     def write(self, address: int, data: bytes, *, memory_address_size: int = 2) -> None:
         """
@@ -44,4 +44,4 @@ class I2CDevice:
         :type memory_address_size: int
         :return: None
         """
-        self._driver.write(self.device_address, address, data, memory_address_size=memory_address_size)
+        self.driver.write(self.device_address, address, data, memory_address_size=memory_address_size)

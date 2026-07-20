@@ -1,0 +1,6 @@
+<?xml version="1.0" standalone="no"?>
+<ROM>
+  <page modetype="Mode 0">
+    <action instr="writeXbytes" addr_width="2" data_width="1" len="4" addr="63632" i2caddr="56">00 00</action>
+  </page>
+</ROM>
