@@ -6,21 +6,74 @@ from registers.a2b_nodeadr import A2B_NODEADR
 
 
 class I2CDriver(ABC):
+    """
+    Interface for I2C communication drivers.
+
+    This abstract base class defines the required methods for implementing I2C
+    communication, including reading data from a device, writing data to a
+    device, and performing direct writes. It provides a standardised structure
+    for any class intending to manage I2C communication.
+
+    Implementing classes must provide concrete implementations of the defined
+    abstract methods to handle the specific I2C communication details.
+    """
+
     @abstractmethod
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
+        """
+        Reads a block of data from a specified device.
+
+        :param device_address: Target device address from which the data is to be read.
+        :type device_address: int
+        :param memory_address: Starting memory address on the target device to read data from.
+        :type memory_address: int
+        :param buffer_size: Number of bytes to read. Defaults to 4.
+        :type buffer_size: int, optional
+        :param memory_address_size: Size of the memory address in bytes. Defaults to 2.
+        :type memory_address_size: int, optional
+        :return: A bytes object containing the data read from the device memory.
+        :rtype: bytes
+        """
         pass
 
     @abstractmethod
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
+        """
+        Writes data to a device's memory location.
+
+        :param device_address: The address of the target device.
+            Type must be an integer.
+        :param memory_address: The memory address within the device where the data
+            will be written. Type must be an integer.
+        :param data: The data to be written to the specified memory address.
+            Must be provided in bytes format.
+        :param memory_address_size: Optional. The size (in bytes) of the memory
+            address field. The default value is 2.
+        :return: None. The method does not return any value.
+        """
         pass
 
     @abstractmethod
     def direct_write(self, device_address: int, data: bytes) -> None:
+        """
+        Writes data directly to a specified device.
+
+        :param device_address: The numeric address of the target device.
+        :param data: The byte sequence to be written directly to the device.
+        :return: This method does not return a value.
+        """
         pass
 
 
 class MCP2221Driver(I2CDriver):
+    """
+    Driver for interacting with I2C devices using the MCP2221 chip.
+
+    :ivar _mcp2221: Internal instance of the MCP2221 communication interface.
+    :type _mcp2221: diag_test_common.mcp2221.MCP2221
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -46,6 +99,13 @@ class MCP2221Driver(I2CDriver):
 
 
 class I2COverDistanceWrapper(I2CDriver):
+    """
+    Handles I2C communication over the A2B protocol
+
+
+    :ivar slave_number: Identifier for the slave node being managed.
+    :type slave_number: int
+    """
     ACCESS_TRANSCEIVER = object()
 
     @property
