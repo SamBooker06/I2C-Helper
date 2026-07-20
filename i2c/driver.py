@@ -204,6 +204,14 @@ class I2COverDistanceWrapper(I2CDriver):
 
         return result
 
+    def direct_read(self, device_address: int, *, buffer_size: int = 4) -> bytes:
+        self._select_peripheral(device_address)
+
+        result = self._driver.direct_read(device_address, buffer_size=buffer_size)
+
+        self._deselect_peripheral(device_address)
+        return result
+
     def write(self, device_address: int, memory_address: int, data: bytes, *,
               memory_address_size: int = 2) -> None:
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER:
