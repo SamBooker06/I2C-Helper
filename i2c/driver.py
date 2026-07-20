@@ -55,6 +55,21 @@ class I2CDriver(ABC):
         pass
 
     @abstractmethod
+    def direct_read(self, device_address: int, *, buffer_size: int = 4) -> bytes:
+        """
+        Performs a direct read operation from a device using its address and retrieves
+        data of a specified size.
+
+        :param device_address: The address of the device to read data from.
+        :type device_address: int
+        :param buffer_size: The size of the buffer to use for reading the data. Defaults to 4.
+        :type buffer_size: int, optional
+        :return: The data read from the device.
+        :rtype: Any
+        """
+        pass
+
+    @abstractmethod
     def direct_write(self, device_address: int, data: bytes) -> None:
         """
         Writes data directly to a specified device.
@@ -87,6 +102,10 @@ class MCP2221Driver(I2CDriver):
         self._mcp2221.write_read(device_address, memory_address.to_bytes(memory_address_size, "big"), buffer)
 
         return buffer
+
+    def direct_read(self, device_address: int, *, buffer_size: int = 4):
+        buffer = bytearray(buffer_size)
+        self._mcp2221.read(device_address, buffer)
 
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
         memory_address_bytes = memory_address.to_bytes(memory_address_size, "big")
@@ -238,7 +257,7 @@ class I2COverDistanceWrapper(I2CDriver):
 
         self._deselect_peripheral(device_address)
 
-    def broadcast(self, device_address: int, memory_address: int, data: bytes) -> None:
+    def broadcast(self, device_address: int, data: bytes) -> None:
         raise NotImplementedError()
 
     def broadcast_to_transceivers(self, memory_address: int, data: bytes) -> None:
