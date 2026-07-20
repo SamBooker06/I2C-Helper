@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.13.0"]
+build-backend = "hatchling.build"
 
 [project]
 name = "i2c-helper"
@@ -10,9 +10,6 @@ dependencies = [
     "diag-test-common",
     "keygen",
 ]
-
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.uv.sources]
 keygen = { path = "../../Local Libraries/keygen-1.2.0-py3-none-any.whl" }
