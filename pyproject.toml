@@ -1,0 +1,12 @@
+[project]
+name = "dsp-communication-test"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "diag-test-common",
+    "keygen",
+]
+
+[tool.uv.sources]
+keygen = { path = "../../Local Libraries/keygen-1.2.0-py3-none-any.whl" }
+diag-test-common = { path = "../../Local Libraries/diag_test_common-0.0.9-py3-none-any.whl" }
