@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "i2c-helper"
-version = "0.1.1"
+version = "1.0.0"
 requires-python = ">=3.9"
 dependencies = [
     "diag-test-common",
@@ -14,3 +14,11 @@ dependencies = [
 [tool.uv.sources]
 keygen = { path = "../../Local Libraries/keygen-1.2.0-py3-none-any.whl" }
 diag-test-common = { path = "../../Local Libraries/diag_test_common-0.0.9-py3-none-any.whl" }
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.27.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/i2c_helper"]

@@ -1,21 +1,22 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from registers.a2b_chip import A2B_CHIP
-from registers.a2b_nodeadr import A2B_NODEADR
+from i2c_helper.registers.a2b_chip import A2B_CHIP
+from i2c_helper.registers.a2b_nodeadr import A2B_NODEADR
+
+class I2CException(Exception):
+    pass
+
+class I2CAddressingError(I2CException):
+    pass
+
+class I2CTimeoutError(I2CException):
+    pass
 
 
 class I2CDriver(ABC):
     """
     Interface for I2C communication drivers.
-
-    This abstract base class defines the required methods for implementing I2C
-    communication, including reading data from a device, writing data to a
-    device, and performing direct writes. It provides a standardised structure
-    for any class intending to manage I2C communication.
-
-    Implementing classes must provide concrete implementations of the defined
-    abstract methods to handle the specific I2C communication details.
     """
 
     @abstractmethod
@@ -92,29 +93,64 @@ class MCP2221Driver(I2CDriver):
     def __init__(self):
         super().__init__()
 
-        from diag_test_common.mcp2221 import MCP2221
-        self._mcp2221 = MCP2221()
+        try:
+            from diag_test_common.mcp2221 import MCP2221
+            self._mcp2221 = MCP2221()
+
+        except ImportError as e:
+            raise ImportError("Could not import MCP2221 library. Are you missing the diag_test_common package?") from e
+
+        except OSError:
+            raise OSError("Could not connect to MCP2221. Is it connected?")
 
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
+
         buffer = bytearray(buffer_size)
+        try:
+            self._mcp2221.write_read(device_address, memory_address.to_bytes(memory_address_size, "big"), buffer)
 
-        self._mcp2221.write_read(device_address, memory_address.to_bytes(memory_address_size, "big"), buffer)
+            return buffer
 
-        return buffer
+        except OSError as e:
+            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+
+        except RuntimeError as e:
+            raise I2CTimeoutError("Max retries reached for read") from e
 
     def direct_read(self, device_address: int, *, buffer_size: int = 4):
         buffer = bytearray(buffer_size)
-        self._mcp2221.read(device_address, buffer)
+        try:
+            self._mcp2221.read(device_address, buffer)
+
+        except OSError as e:
+            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+
+        except RuntimeError as e:
+            raise I2CTimeoutError("Max retries reached for direct read") from e
 
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
         memory_address_bytes = memory_address.to_bytes(memory_address_size, "big")
         payload = memory_address_bytes + data
 
-        self._mcp2221.write(device_address, payload)
+        try:
+            self._mcp2221.write(device_address, payload)
+
+        except OSError as e:
+            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+
+        except RuntimeError as e:
+            raise I2CTimeoutError("Max retries reached for write") from e
 
     def direct_write(self, device_address: int, data: bytes) -> None:
-        self._mcp2221.write(device_address, data)
+        try:
+            self._mcp2221.write(device_address, data)
+
+        except OSError as e:
+            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+
+        except RuntimeError as e:
+            raise I2CTimeoutError("Max retries reached for direct write") from e
 
 
 class I2COverDistanceWrapper(I2CDriver):
@@ -202,7 +238,7 @@ class I2COverDistanceWrapper(I2CDriver):
 
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
-        if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER:
+        if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             return self.read_from_transceiver(memory_address, buffer_size=buffer_size)
 
         self._select_peripheral(device_address)
@@ -233,7 +269,7 @@ class I2COverDistanceWrapper(I2CDriver):
 
     def write(self, device_address: int, memory_address: int, data: bytes, *,
               memory_address_size: int = 2) -> None:
-        if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER:
+        if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             self.write_to_transceiver(memory_address, data)
             return
 
