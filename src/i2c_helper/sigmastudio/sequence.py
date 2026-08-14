@@ -29,6 +29,9 @@ class Sequence:
             mode_type = page.get("modetype", None)
             assert mode_type is not None, "modetype field missing"
 
+            # Typically used for selecting the bus during A2B bring-up
+            addr_increment = page.get("AddrIncr", 0)
+
             for action in page.findall("action"):
                 instruction = action.get("instr")
                 assert instruction is not None, "instruction field not found"
@@ -44,7 +47,7 @@ class Sequence:
                     assert addr is not None, "addr not found"
                     assert addr_width is not None, "addr_width not found"
 
-                    device_address = int(i2caddr, 10)
+                    device_address = int(i2caddr, 10) + addr_increment
                     memory_address = int(addr, 10)
                     memory_address_size = int(addr_width, 10)
 
