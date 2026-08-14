@@ -26,8 +26,8 @@ class Sequence:
         for page in root.findall("page"):
             commands = []
 
-            mode_type = page.get("mode_type", None)
-            assert mode_type is not None, "mode_type field missing"
+            mode_type = page.get("modetype", None)
+            assert mode_type is not None, "modetype field missing"
 
             for action in page.findall("action"):
                 instruction = action.get("instr")
