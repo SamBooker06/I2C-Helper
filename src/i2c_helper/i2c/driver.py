@@ -4,11 +4,14 @@ from typing import Optional
 from i2c_helper.registers.a2b_chip import A2B_CHIP
 from i2c_helper.registers.a2b_nodeadr import A2B_NODEADR
 
+
 class I2CException(Exception):
     pass
 
+
 class I2CAddressingError(I2CException):
     pass
+
 
 class I2CTimeoutError(I2CException):
     pass
@@ -39,7 +42,8 @@ class I2CDriver(ABC):
         pass
 
     @abstractmethod
-    def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
+    def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2,
+              stride_size: int = 0) -> None:
         """
         Writes data to a device's memory location.
 
@@ -51,6 +55,7 @@ class I2CDriver(ABC):
             Must be provided in bytes format.
         :param memory_address_size: Optional. The size (in bytes) of the memory
             address field. The default value is 2.
+        :param stride_size: The size of the stride between consecutive memory
         :return: None. The method does not return any value.
         """
         pass
@@ -89,6 +94,8 @@ class MCP2221Driver(I2CDriver):
     :ivar _mcp2221: Internal instance of the MCP2221 communication interface.
     :type _mcp2221: diag_test_common.mcp2221.MCP2221
     """
+
+    MAX_CHUNK_SIZE = 60
 
     def __init__(self):
         super().__init__()
@@ -129,12 +136,22 @@ class MCP2221Driver(I2CDriver):
         except RuntimeError as e:
             raise I2CTimeoutError("Max retries reached for direct read") from e
 
-    def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
-        memory_address_bytes = memory_address.to_bytes(memory_address_size, "big")
-        payload = memory_address_bytes + data
-
+    def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2,
+              stride_size: int = 0) -> None:
         try:
-            self._mcp2221.write(device_address, payload)
+            step = self.MAX_CHUNK_SIZE - memory_address_size
+            if stride_size > 1:
+                step -= step % stride_size
+
+            for byte_num in range(0, len(data), step):
+                chunk = data[byte_num:byte_num + step]
+
+                memory_address_bytes = (memory_address + (byte_num // stride_size if stride_size else 0)).to_bytes(
+                    memory_address_size, "big")
+
+                payload = memory_address_bytes + chunk
+                # print(f"addr={hex(device_address)} reg={memory_address_bytes.hex()} data={chunk.hex()}")
+                self._mcp2221.write(device_address, payload)
 
         except OSError as e:
             raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
@@ -144,7 +161,9 @@ class MCP2221Driver(I2CDriver):
 
     def direct_write(self, device_address: int, data: bytes) -> None:
         try:
-            self._mcp2221.write(device_address, data)
+            for i in range(0, len(data), self.MAX_CHUNK_SIZE):
+                chunk = data[i:i + self.MAX_CHUNK_SIZE]
+                self._mcp2221.write(device_address, chunk)
 
         except OSError as e:
             raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
@@ -268,14 +287,15 @@ class I2COverDistanceWrapper(I2CDriver):
         return result
 
     def write(self, device_address: int, memory_address: int, data: bytes, *,
-              memory_address_size: int = 2) -> None:
+              memory_address_size: int = 2, stride_size: int = 0) -> None:
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             self.write_to_transceiver(memory_address, data)
             return
 
         self._select_peripheral(device_address)
 
-        self._driver.write(self.bus_address, memory_address, data, memory_address_size=memory_address_size)
+        self._driver.write(self.bus_address, memory_address, data, memory_address_size=memory_address_size,
+                           stride_size=stride_size)
 
         self._deselect_peripheral(device_address)
 

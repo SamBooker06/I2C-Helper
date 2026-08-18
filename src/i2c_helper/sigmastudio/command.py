@@ -35,7 +35,7 @@ class I2CReadCommand(I2CCommand):
 
 class I2CWriteCommand(I2CCommand):
     def __init__(self, driver: I2CDriver, device_address: int, memory_address: int, memory_address_size: int,
-                 data: bytes):
+                 data: bytes, stride_size: int = 0):
         super().__init__(driver, device_address, memory_address, memory_address_size)
 
         self.data = data

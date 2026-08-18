@@ -1,7 +1,8 @@
 from enum import Enum
+from time import sleep
 
 from i2c_helper import I2CDriver
-from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand
+from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand, I2CReadCommand
 
 
 class SequenceInstruction(Enum):
@@ -15,7 +16,7 @@ class Sequence:
     @staticmethod
     def from_xml(
             xml: str,
-            driver: I2CDriver, replace_reads: bool = True
+            driver: I2CDriver, replace_reads: bool = False
     ) -> list["Sequence"]:
         from xml.etree import ElementTree
 
@@ -29,9 +30,6 @@ class Sequence:
             mode_type = page.get("modetype", None)
             assert mode_type is not None, "modetype field missing"
 
-            # Typically used for selecting the bus during A2B bring-up
-            addr_increment = page.get("AddrIncr", 0)
-
             for action in page.findall("action"):
                 instruction = action.get("instr")
                 assert instruction is not None, "instruction field not found"
@@ -42,16 +40,20 @@ class Sequence:
                     i2caddr = action.get("i2caddr")
                     addr = action.get("addr")
                     addr_width = action.get("addr_width")
+                    addr_incr = action.get("AddrIncr")
 
                     assert i2caddr is not None, "i2caddr not found"
                     assert addr is not None, "addr not found"
                     assert addr_width is not None, "addr_width not found"
+                    assert addr_incr is not None, "AddrIncr not found"
 
-                    device_address = int(i2caddr, 10) + addr_increment
+                    device_address = int(i2caddr, 10)
                     memory_address = int(addr, 10)
                     memory_address_size = int(addr_width, 10)
+                    stride_size = int(addr_incr, 10)
 
-                    data = bytes.fromhex(action.text or "")
+                    raw = (action.text or "").split()
+                    data = bytes.fromhex("".join(token.zfill(2) for token in raw))
 
                     commands.append(
                         I2CWriteCommand(
@@ -60,6 +62,7 @@ class Sequence:
                             memory_address=memory_address,
                             memory_address_size=memory_address_size,
                             data=data,
+                            stride_size=stride_size,
                         )
                     )
 
@@ -76,12 +79,30 @@ class Sequence:
                 elif instruction == SequenceInstruction.NoOp:
                     commands.append(NoOpCommand())
 
-                elif instruction == "read":
+                elif instruction == SequenceInstruction.Read:
                     if replace_reads:
                         commands.append(NoOpCommand())
 
                     else:
-                        raise ValueError("Read command present, and not told to skip")
+                        i2caddr = action.get("i2caddr")
+                        addr = action.get("addr")
+                        addr_width = action.get("addr_width")
+                        buffer_size = action.get("len")
+
+                        assert i2caddr is not None, "i2caddr not found"
+                        assert addr is not None, "addr not found"
+                        assert addr_width is not None, "addr_width not found"
+                        assert buffer_size is not None, "len not found"
+
+                        device_address = int(i2caddr, 10)
+                        memory_address = int(addr, 10)
+                        memory_address_size = int(addr_width, 10)
+                        buffer_size = int(buffer_size, 10)
+
+                        commands.append(
+                            I2CReadCommand(driver=driver, device_address=device_address, memory_address=memory_address,
+                                           memory_address_size=memory_address_size,
+                                           buffer_size=buffer_size))
 
                 else:
                     raise ValueError(
@@ -103,3 +124,5 @@ class Sequence:
     def execute(self) -> None:
         for command in self.commands:
             command.execute()
+
+            sleep(0.01)
