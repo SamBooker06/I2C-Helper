@@ -32,11 +32,11 @@ class I2CDeviceInterface:
         :return: The bytes read from the specified memory address.
         :rtype: bytes
         """
-        return self.driver.read(self.device_address, address, buffer_size=buffer_size if buffer_size is not None else self.default_buffer_size,
+        return self.driver.read(self.device_address, address, buffer_size=buffer_size or self.default_buffer_size,
                                 memory_address_size=self.memory_address_size)
 
     def direct_read(self, *, buffer_size: Optional[int] = None) -> bytes:
-        return self.driver.direct_read(self.device_address, buffer_size=buffer_size)
+        return self.driver.direct_read(self.device_address, buffer_size=buffer_size or self.default_buffer_size)
 
     def write(self, address: int, data: Union[bytes, int]) -> None:
         """
@@ -46,9 +46,6 @@ class I2CDeviceInterface:
         :type address: int
         :param data: The data to write to the specified memory address.
         :type data: bytes
-        :param memory_address_size: The size, in bytes, of the memory address.
-            Defaults to 2.
-        :type memory_address_size: int
         :return: None
         """
         if isinstance(data, int):

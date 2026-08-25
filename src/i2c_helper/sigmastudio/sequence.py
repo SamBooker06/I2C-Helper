@@ -1,5 +1,6 @@
 from enum import Enum
-from time import sleep
+from pathlib import Path
+from typing import Union
 
 from i2c_helper import I2CDriver
 from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand, I2CReadCommand
@@ -14,9 +15,25 @@ class SequenceInstruction(Enum):
 
 class Sequence:
     @staticmethod
+    def from_xml_file(path: Union[Path, str], driver: I2CDriver, replace_reads_with_noop: bool = False) -> List["Sequence"]:
+        if not isinstance(path, Path):
+            path = Path(path)
+
+        if not path.exists():
+            raise ValueError(f"Path {path!r} does not exist")
+
+        if not path.is_file():
+            raise ValueError(f"Path {path!r} is not a file")
+
+        with path:
+            contents = path.read_text()
+
+            return Sequence.from_xml(contents, driver, replace_reads_with_noop)
+
+    @staticmethod
     def from_xml(
             xml: str,
-            driver: I2CDriver, replace_reads: bool = False
+            driver: I2CDriver, replace_reads_with_noop: bool = False
     ) -> list["Sequence"]:
         from xml.etree import ElementTree
 
@@ -125,4 +142,3 @@ class Sequence:
         for command in self.commands:
             command.execute()
 
-            sleep(0.01)
