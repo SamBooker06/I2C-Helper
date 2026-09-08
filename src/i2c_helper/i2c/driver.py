@@ -200,7 +200,7 @@ class I2COverDistanceWrapper(I2CDriver):
     @staticmethod
     @functools.lru_cache(maxsize=1)
     def _did_switch_fail(driver: I2CDriver, transceiver_address: int) -> bool:
-        return not bool(I2COverDistanceWrapper._get_switch_status(driver, transceiver_address) & A2B_SWSTAT.FAULT)
+        return bool(I2COverDistanceWrapper._get_switch_status(driver, transceiver_address) & A2B_SWSTAT.FAULT)
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
