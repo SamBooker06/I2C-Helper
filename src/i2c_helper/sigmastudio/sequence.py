@@ -15,7 +15,8 @@ class SequenceInstruction(Enum):
 
 class Sequence:
     @staticmethod
-    def from_xml_file(path: Union[Path, str], driver: I2CDriver, replace_reads_with_noop: bool = False) -> List["Sequence"]:
+    def from_xml_file(path: Union[Path, str], driver: I2CDriver, replace_reads_with_noop: bool = False) -> list[
+        "Sequence"]:
         if not isinstance(path, Path):
             path = Path(path)
 
@@ -25,10 +26,9 @@ class Sequence:
         if not path.is_file():
             raise ValueError(f"Path {path!r} is not a file")
 
-        with path:
-            contents = path.read_text()
+        contents = path.read_text()
 
-            return Sequence.from_xml(contents, driver, replace_reads_with_noop)
+        return Sequence.from_xml(contents, driver, replace_reads_with_noop)
 
     @staticmethod
     def from_xml(
@@ -97,7 +97,7 @@ class Sequence:
                     commands.append(NoOpCommand())
 
                 elif instruction == SequenceInstruction.Read:
-                    if replace_reads:
+                    if replace_reads_with_noop:
                         commands.append(NoOpCommand())
 
                     else:
@@ -141,4 +141,3 @@ class Sequence:
     def execute(self) -> None:
         for command in self.commands:
             command.execute()
-
