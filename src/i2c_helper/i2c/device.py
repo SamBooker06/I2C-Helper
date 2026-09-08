@@ -27,8 +27,6 @@ class I2CDeviceInterface:
         :type address: int
         :param buffer_size: The number of bytes to read. Defaults to 4.
         :type buffer_size: int, optional
-        :param memory_address_size: The size, in bytes, of the memory address. Defaults to 2.
-        :type memory_address_size: int, optional
         :return: The bytes read from the specified memory address.
         :rtype: bytes
         """

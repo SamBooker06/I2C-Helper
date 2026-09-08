@@ -1,16 +1,26 @@
+import functools
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from i2c_helper.registers.a2b_chip import A2B_CHIP
+from i2c_helper.registers.a2b_discstat import A2B_DISCSTAT
 from i2c_helper.registers.a2b_nodeadr import A2B_NODEADR
+from i2c_helper.registers.a2b_swstat import A2B_SWSTAT
+
 
 class I2CException(Exception):
     pass
 
+
 class I2CAddressingError(I2CException):
     pass
 
+
 class I2CTimeoutError(I2CException):
+    pass
+
+
+class SlaveDiscoveryException(I2CException):
     pass
 
 
@@ -175,6 +185,44 @@ class I2COverDistanceWrapper(I2CDriver):
     def bus_address(self) -> int:
         return self.transceiver_address + 1
 
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _get_switch_status(driver: I2CDriver, transceiver_address: int):
+        return int.from_bytes(
+            driver.read(transceiver_address, A2B_SWSTAT.address, buffer_size=1, memory_address_size=1),
+            "big")
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _is_switch_active() -> bool:
+        return bool(I2COverDistanceWrapper._get_switch_status() & A2B_SWSTAT.FIN)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _did_switch_fail() -> bool:
+        return not bool(I2COverDistanceWrapper._get_switch_status() & A2B_SWSTAT.FAULT)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _get_slave_count(driver: I2CDriver, transceiver_address: int) -> int:
+        discovery_status = int.from_bytes(driver.read(transceiver_address, A2B_DISCSTAT.address), "big")
+        last_discovered_node_number = A2B_DISCSTAT.DNODE(discovery_status)
+
+        return last_discovered_node_number + 1 if I2COverDistanceWrapper._is_switch_active() and not I2COverDistanceWrapper._did_switch_fail() else 0
+
+    def __init__(self, i2c_driver: I2CDriver, slave_number: int, transceiver_address: int = 0x68):
+        self._driver = i2c_driver
+        self.slave_number = slave_number
+
+        self._transceiver_address = transceiver_address
+
+        self._node_reserved_bits: Optional[int] = None
+        self._peripheral_reserved_bits: dict[int, int] = {}
+
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
     def _get_node_reserved_bits(self) -> int:
         if self._node_reserved_bits is None:
             self._node_reserved_bits = int.from_bytes(
@@ -227,15 +275,6 @@ class I2COverDistanceWrapper(I2CDriver):
                            memory_address_size=1)
         self._deselect_node()
 
-    def __init__(self, i2c_driver: I2CDriver, slave_number: int, transceiver_address: int = 0x68):
-        self._driver = i2c_driver
-        self.slave_number = slave_number
-
-        self._transceiver_address = transceiver_address
-
-        self._node_reserved_bits: Optional[int] = None
-        self._peripheral_reserved_bits: dict[int, int] = {}
-
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
@@ -267,8 +306,7 @@ class I2COverDistanceWrapper(I2CDriver):
         self._deselect_peripheral(device_address)
         return result
 
-    def write(self, device_address: int, memory_address: int, data: bytes, *,
-              memory_address_size: int = 2) -> None:
+    def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             self.write_to_transceiver(memory_address, data)
             return
@@ -293,8 +331,9 @@ class I2COverDistanceWrapper(I2CDriver):
 
         self._deselect_peripheral(device_address)
 
-    def broadcast(self, device_address: int, data: bytes) -> None:
-        raise NotImplementedError()
+    def broadcast(self, memory_address: int, data: bytes) -> None:
+        self._select_node(broadcast=True)
 
-    def broadcast_to_transceivers(self, memory_address: int, data: bytes) -> None:
-        raise NotImplementedError()
+        self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
+
+        self._deselect_node()
