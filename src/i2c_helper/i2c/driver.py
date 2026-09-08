@@ -194,13 +194,13 @@ class I2COverDistanceWrapper(I2CDriver):
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
-    def _is_switch_active() -> bool:
-        return bool(I2COverDistanceWrapper._get_switch_status() & A2B_SWSTAT.FIN)
+    def _is_switch_active(driver: I2CDriver, transceiver_address: int) -> bool:
+        return bool(I2COverDistanceWrapper._get_switch_status(driver, transceiver_address) & A2B_SWSTAT.FIN)
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
-    def _did_switch_fail() -> bool:
-        return not bool(I2COverDistanceWrapper._get_switch_status() & A2B_SWSTAT.FAULT)
+    def _did_switch_fail(driver: I2CDriver, transceiver_address: int) -> bool:
+        return not bool(I2COverDistanceWrapper._get_switch_status(driver, transceiver_address) & A2B_SWSTAT.FAULT)
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
@@ -208,7 +208,9 @@ class I2COverDistanceWrapper(I2CDriver):
         discovery_status = int.from_bytes(driver.read(transceiver_address, A2B_DISCSTAT.address), "big")
         last_discovered_node_number = A2B_DISCSTAT.DNODE(discovery_status)
 
-        return last_discovered_node_number + 1 if I2COverDistanceWrapper._is_switch_active() and not I2COverDistanceWrapper._did_switch_fail() else 0
+        active = I2COverDistanceWrapper._is_switch_active(driver, transceiver_address)
+        switch_success = not I2COverDistanceWrapper._did_switch_fail(driver, transceiver_address)
+        return last_discovered_node_number + 1 if active and switch_success else 0
 
     def __init__(self, i2c_driver: I2CDriver, slave_number: int, transceiver_address: int = 0x68):
         self._driver = i2c_driver
