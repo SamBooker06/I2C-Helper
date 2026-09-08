@@ -221,10 +221,6 @@ class I2COverDistanceWrapper(I2CDriver):
         self._node_reserved_bits: Optional[int] = None
         self._peripheral_reserved_bits: dict[int, int] = {}
 
-        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
-            raise SlaveDiscoveryException(
-                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
-
     def _get_node_reserved_bits(self) -> int:
         if self._node_reserved_bits is None:
             self._node_reserved_bits = int.from_bytes(
@@ -279,6 +275,10 @@ class I2COverDistanceWrapper(I2CDriver):
 
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             return self.read_from_transceiver(memory_address, buffer_size=buffer_size)
 
@@ -292,6 +292,10 @@ class I2COverDistanceWrapper(I2CDriver):
         return result
 
     def read_from_transceiver(self, memory_address: int, *, buffer_size: int = 4) -> bytes:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         self._select_node()
 
         result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size, memory_address_size=1)
@@ -301,6 +305,10 @@ class I2COverDistanceWrapper(I2CDriver):
         return result
 
     def direct_read(self, device_address: int, *, buffer_size: int = 4) -> bytes:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         self._select_peripheral(device_address)
 
         result = self._driver.direct_read(device_address, buffer_size=buffer_size)
@@ -309,6 +317,10 @@ class I2COverDistanceWrapper(I2CDriver):
         return result
 
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             self.write_to_transceiver(memory_address, data)
             return
@@ -320,6 +332,10 @@ class I2COverDistanceWrapper(I2CDriver):
         self._deselect_peripheral(device_address)
 
     def write_to_transceiver(self, memory_address: int, data: bytes) -> None:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         self._select_node()
 
         self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
@@ -327,6 +343,10 @@ class I2COverDistanceWrapper(I2CDriver):
         self._deselect_node()
 
     def direct_write(self, device_address: int, data: bytes) -> None:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         self._select_peripheral(device_address)
 
         self._driver.direct_write(self.bus_address, data)
@@ -334,6 +354,10 @@ class I2COverDistanceWrapper(I2CDriver):
         self._deselect_peripheral(device_address)
 
     def broadcast(self, memory_address: int, data: bytes) -> None:
+        if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
+            raise SlaveDiscoveryException(
+                f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
+
         self._select_node(broadcast=True)
 
         self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
