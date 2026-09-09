@@ -1,5 +1,6 @@
 import functools
 from abc import ABC, abstractmethod
+from threading import RLock
 from typing import Optional
 
 from i2c_helper.registers.a2b_chip import A2B_CHIP
@@ -91,6 +92,15 @@ class I2CDriver(ABC):
         """
         pass
 
+    @abstractmethod
+    def transaction(self) -> RLock:
+        """
+        Get the transaction lock for the thread
+
+        :return:
+        """
+        raise NotImplementedError()
+
 
 class MCP2221Driver(I2CDriver):
     """
@@ -113,54 +123,68 @@ class MCP2221Driver(I2CDriver):
         except OSError:
             raise OSError("Could not connect to MCP2221. Is it connected?")
 
+        self._rlock = RLock()
+
+    def transaction(self) -> RLock:
+        return self._rlock
+
     def read(self, device_address: int, memory_address: int, *, buffer_size: int = 4,
              memory_address_size: int = 2) -> bytes:
 
         buffer = bytearray(buffer_size)
-        try:
-            self._mcp2221.write_read(device_address, memory_address.to_bytes(memory_address_size, "big"), buffer)
+        with self.transaction():
+            try:
+                self._mcp2221.write_read(device_address, memory_address.to_bytes(memory_address_size, "big"), buffer)
 
-            return buffer
+                return buffer
 
-        except OSError as e:
-            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+            except OSError as e:
+                raise I2CAddressingError(
+                    f"MCP connected, but could not locate device with address {device_address}") from e
 
-        except RuntimeError as e:
-            raise I2CTimeoutError("Max retries reached for read") from e
+            except RuntimeError as e:
+                raise I2CTimeoutError("Max retries reached for read") from e
 
     def direct_read(self, device_address: int, *, buffer_size: int = 4):
         buffer = bytearray(buffer_size)
-        try:
-            self._mcp2221.read(device_address, buffer)
 
-        except OSError as e:
-            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+        with self._rlock:
+            try:
+                self._mcp2221.read(device_address, buffer)
 
-        except RuntimeError as e:
-            raise I2CTimeoutError("Max retries reached for direct read") from e
+            except OSError as e:
+                raise I2CAddressingError(
+                    f"MCP connected, but could not locate device with address {device_address}") from e
+
+            except RuntimeError as e:
+                raise I2CTimeoutError("Max retries reached for direct read") from e
 
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
         memory_address_bytes = memory_address.to_bytes(memory_address_size, "big")
         payload = memory_address_bytes + data
 
-        try:
-            self._mcp2221.write(device_address, payload)
+        with self.transaction():
+            try:
+                self._mcp2221.write(device_address, payload)
 
-        except OSError as e:
-            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+            except OSError as e:
+                raise I2CAddressingError(
+                    f"MCP connected, but could not locate device with address {device_address}") from e
 
-        except RuntimeError as e:
-            raise I2CTimeoutError("Max retries reached for write") from e
+            except RuntimeError as e:
+                raise I2CTimeoutError("Max retries reached for write") from e
 
     def direct_write(self, device_address: int, data: bytes) -> None:
-        try:
-            self._mcp2221.write(device_address, data)
+        with self._rlock:
+            try:
+                self._mcp2221.write(device_address, data)
 
-        except OSError as e:
-            raise I2CAddressingError(f"MCP connected, but could not locate device with address {device_address}") from e
+            except OSError as e:
+                raise I2CAddressingError(
+                    f"MCP connected, but could not locate device with address {device_address}") from e
 
-        except RuntimeError as e:
-            raise I2CTimeoutError("Max retries reached for direct write") from e
+            except RuntimeError as e:
+                raise I2CTimeoutError("Max retries reached for direct write") from e
 
 
 class I2COverDistanceWrapper(I2CDriver):
@@ -221,6 +245,9 @@ class I2COverDistanceWrapper(I2CDriver):
         self._node_reserved_bits: Optional[int] = None
         self._peripheral_reserved_bits: dict[int, int] = {}
 
+    def transaction(self) -> RLock:
+        return self._driver.transaction()  # They share the same lock
+
     def _get_node_reserved_bits(self) -> int:
         if self._node_reserved_bits is None:
             self._node_reserved_bits = int.from_bytes(
@@ -231,14 +258,18 @@ class I2COverDistanceWrapper(I2CDriver):
         return self._node_reserved_bits
 
     def _get_peripheral_reserved_bits(self, device_address: int) -> int:
-        if device_address not in self._peripheral_reserved_bits:
-            self._peripheral_reserved_bits[device_address] = A2B_CHIP.RESERVED & int.from_bytes(
-                self._driver.read(self.bus_address, A2B_CHIP.address, buffer_size=1,
-                                  memory_address_size=1), "big")
+        if device_address in self._peripheral_reserved_bits:
+            return self._peripheral_reserved_bits[device_address]
+
+        chip_register_contents = int.from_bytes(
+            self._driver.read(self.bus_address, A2B_CHIP.address, buffer_size=1, memory_address_size=1), "big")
+
+        self._peripheral_reserved_bits[device_address] = A2B_CHIP.RESERVED & chip_register_contents
 
         return self._peripheral_reserved_bits[device_address]
 
     def _select_node(self, *, peripheral: bool = False, broadcast: bool = False) -> None:
+
         reserved_bits = self._get_node_reserved_bits()
 
         nodeadr_value = reserved_bits | A2B_NODEADR.NODE(
@@ -282,12 +313,15 @@ class I2COverDistanceWrapper(I2CDriver):
         if device_address == I2COverDistanceWrapper.ACCESS_TRANSCEIVER or device_address == self.transceiver_address:
             return self.read_from_transceiver(memory_address, buffer_size=buffer_size)
 
-        self._select_peripheral(device_address)
+        with self.transaction():
+            self._select_peripheral(device_address)
 
-        result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
-                                   memory_address_size=memory_address_size)
+            try:
+                result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
+                                           memory_address_size=memory_address_size)
 
-        self._deselect_peripheral(device_address)
+            finally:
+                self._deselect_peripheral(device_address)
 
         return result
 
@@ -296,11 +330,14 @@ class I2COverDistanceWrapper(I2CDriver):
             raise SlaveDiscoveryException(
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
-        self._select_node()
+        with self.transaction():
+            self._select_node()
 
-        result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size, memory_address_size=1)
-
-        self._deselect_node()
+            try:
+                result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
+                                           memory_address_size=1)
+            finally:
+                self._deselect_node()
 
         return result
 
@@ -309,11 +346,14 @@ class I2COverDistanceWrapper(I2CDriver):
             raise SlaveDiscoveryException(
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
-        self._select_peripheral(device_address)
+        with self.transaction():
+            self._select_peripheral(device_address)
+            try:
+                result = self._driver.direct_read(device_address, buffer_size=buffer_size)
 
-        result = self._driver.direct_read(device_address, buffer_size=buffer_size)
+            finally:
+                self._deselect_peripheral(device_address)
 
-        self._deselect_peripheral(device_address)
         return result
 
     def write(self, device_address: int, memory_address: int, data: bytes, *, memory_address_size: int = 2) -> None:
@@ -325,41 +365,53 @@ class I2COverDistanceWrapper(I2CDriver):
             self.write_to_transceiver(memory_address, data)
             return
 
-        self._select_peripheral(device_address)
+        with self.transaction():
+            self._select_peripheral(device_address)
 
-        self._driver.write(self.bus_address, memory_address, data, memory_address_size=memory_address_size)
+            try:
+                self._driver.write(self.bus_address, memory_address, data, memory_address_size=memory_address_size)
 
-        self._deselect_peripheral(device_address)
+            finally:
+                self._deselect_peripheral(device_address)
 
     def write_to_transceiver(self, memory_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
             raise SlaveDiscoveryException(
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
-        self._select_node()
+        with self.transaction():
+            self._select_node()
 
-        self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
+            try:
+                self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
 
-        self._deselect_node()
+            finally:
+                self._deselect_node()
 
     def direct_write(self, device_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
             raise SlaveDiscoveryException(
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
-        self._select_peripheral(device_address)
+        with self.transaction():
+            self._select_peripheral(device_address)
 
-        self._driver.direct_write(self.bus_address, data)
+            try:
+                self._driver.direct_write(self.bus_address, data)
 
-        self._deselect_peripheral(device_address)
+            finally:
+                self._deselect_peripheral(device_address)
 
     def broadcast(self, memory_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
             raise SlaveDiscoveryException(
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
-        self._select_node(broadcast=True)
+        with self.transaction():
+            self._select_node(broadcast=True)
 
-        self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
+            try:
+                self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
 
-        self._deselect_node()
+            finally:
+                self._deselect_node()
