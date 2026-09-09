@@ -50,7 +50,7 @@ class I2CDeviceInterface:
         :type buffer_size: int, optional
         :return: None
         """
-        if buffer_size <= 0:
+        if buffer_size is not None and buffer_size <= 0:
             raise ValueError("buffer_size must be greater than 0")
 
         if isinstance(data, int):
