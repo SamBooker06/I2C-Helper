@@ -13,7 +13,9 @@ class I2CDeviceInterface:
     :ivar device_address: The I2C address of the device to interact with.
     :type device_address: int
     """
-    def __init__(self, device_address: int, driver: I2CDriver, *,  memory_address_size: int = 2, default_buffer_size: int = 4):
+
+    def __init__(self, device_address: int, driver: I2CDriver, *, memory_address_size: int = 2,
+                 default_buffer_size: int = 4):
         self.device_address = device_address
         self.driver = driver
         self.memory_address_size = memory_address_size
@@ -36,7 +38,7 @@ class I2CDeviceInterface:
     def direct_read(self, *, buffer_size: Optional[int] = None) -> bytes:
         return self.driver.direct_read(self.device_address, buffer_size=buffer_size or self.default_buffer_size)
 
-    def write(self, address: int, data: Union[bytes, int]) -> None:
+    def write(self, address: int, data: Union[bytes, int], *, buffer_size: Optional[int] = None) -> None:
         """
         Writes data to a specified memory address of a device.
 
@@ -44,10 +46,15 @@ class I2CDeviceInterface:
         :type address: int
         :param data: The data to write to the specified memory address.
         :type data: bytes
+        :param buffer_size: The number of bytes to write to the specified memory address.
+        :type buffer_size: int, optional
         :return: None
         """
+        if buffer_size <= 0:
+            raise ValueError("buffer_size must be greater than 0")
+
         if isinstance(data, int):
-            data = data.to_bytes(self.default_buffer_size, "big")
+            data = data.to_bytes(buffer_size if buffer_size is not None else self.default_buffer_size, "big")
         self.driver.write(self.device_address, address, data, memory_address_size=self.memory_address_size)
 
     def direct_write(self, data: bytes) -> None:
