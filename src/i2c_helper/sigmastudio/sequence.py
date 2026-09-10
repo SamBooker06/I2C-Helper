@@ -1,9 +1,10 @@
 from enum import Enum
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
 
-from i2c_helper import I2CDriver
-from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand, I2CReadCommand
+from i2c_helper import I2CDriver, I2COverDistanceWrapper
+from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand, I2CReadCommand, \
+    I2CCommand
 
 
 class SequenceInstruction(Enum):
@@ -139,5 +140,19 @@ class Sequence:
         return self.mode_type
 
     def execute(self) -> None:
+        distance_driver: Optional[I2COverDistanceWrapper] = None
+
         for command in self.commands:
+            if isinstance(command, I2CCommand):
+                if distance_driver is None and isinstance(command.driver, I2COverDistanceWrapper):
+                    distance_driver = command.driver
+                    # This will speed up a sequence over distance
+                    distance_driver.keep_current_node_selected()
+
+                elif distance_driver != command.driver:
+                    raise ValueError("Cannot have different drivers in same sequence")
+
             command.execute()
+
+        if distance_driver:
+            distance_driver.deselect_node()

@@ -252,6 +252,16 @@ class I2COverDistanceWrapper(I2CDriver):
         switch_success = not I2COverDistanceWrapper._did_switch_fail(driver, transceiver_address)
         return last_discovered_node_number + 1 if active and switch_success else 0
 
+    def keep_current_node_selected(self):
+        self._should_keep_current_selection = True
+
+    def deselect_node(self):
+        self._should_keep_current_selection = False
+
+
+    def _should_do_selection(self):
+        return not self._should_keep_current_selection or not self._is_node_selected
+
     def __init__(self, i2c_driver: I2CDriver, slave_number: int, transceiver_address: int = 0x68):
         self._driver = i2c_driver
         self.slave_number = slave_number
@@ -260,6 +270,9 @@ class I2COverDistanceWrapper(I2CDriver):
 
         self._node_reserved_bits: Optional[int] = None
         self._peripheral_reserved_bits: dict[int, int] = {}
+
+        self._is_node_selected = False
+        self._should_keep_current_selection = False
 
     def transaction(self) -> RLock:
         return self._driver.transaction()  # They share the same lock
@@ -330,14 +343,17 @@ class I2COverDistanceWrapper(I2CDriver):
             return self.read_from_transceiver(memory_address, buffer_size=buffer_size)
 
         with self.transaction():
-            self._select_peripheral(device_address)
+            if self._should_do_selection():
+                self._select_peripheral(device_address)
+                self._is_node_selected = True
 
             try:
                 result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
                                            memory_address_size=memory_address_size)
 
             finally:
-                self._deselect_peripheral(device_address)
+                if self._should_do_selection():
+                    self._deselect_peripheral(device_address)
 
         return result
 
@@ -347,13 +363,15 @@ class I2COverDistanceWrapper(I2CDriver):
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
         with self.transaction():
-            self._select_node()
+            if self._should_do_selection():
+                self._select_node()
 
             try:
                 result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
                                            memory_address_size=1)
             finally:
-                self._deselect_node()
+                if self._should_do_selection():
+                    self._deselect_node()
 
         return result
 
@@ -363,12 +381,15 @@ class I2COverDistanceWrapper(I2CDriver):
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
         with self.transaction():
-            self._select_peripheral(device_address)
+            if self._should_do_selection():
+                self._select_peripheral(device_address)
+
             try:
                 result = self._driver.direct_read(device_address, buffer_size=buffer_size)
 
             finally:
-                self._deselect_peripheral(device_address)
+                if self._should_do_selection():
+                    self._deselect_peripheral(device_address)
 
         return result
 
@@ -382,13 +403,15 @@ class I2COverDistanceWrapper(I2CDriver):
             return
 
         with self.transaction():
-            self._select_peripheral(device_address)
+            if self._should_do_selection():
+                self._select_peripheral(device_address)
 
             try:
                 self._driver.write(self.bus_address, memory_address, data, memory_address_size=memory_address_size)
 
             finally:
-                self._deselect_peripheral(device_address)
+                if self._should_do_selection():
+                    self._deselect_peripheral(device_address)
 
     def write_to_transceiver(self, memory_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
@@ -396,13 +419,15 @@ class I2COverDistanceWrapper(I2CDriver):
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
         with self.transaction():
-            self._select_node()
+            if self._should_do_selection():
+                self._select_node()
 
             try:
                 self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
 
             finally:
-                self._deselect_node()
+                if self._should_do_selection():
+                    self._deselect_node()
 
     def direct_write(self, device_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
@@ -410,13 +435,15 @@ class I2COverDistanceWrapper(I2CDriver):
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
         with self.transaction():
-            self._select_peripheral(device_address)
+            if self._should_do_selection():
+                self._select_peripheral(device_address)
 
             try:
                 self._driver.direct_write(self.bus_address, data)
 
             finally:
-                self._deselect_peripheral(device_address)
+                if self._should_do_selection():
+                    self._deselect_peripheral(device_address)
 
     def broadcast(self, memory_address: int, data: bytes) -> None:
         if self._get_slave_count(self._driver, self.transceiver_address) - 1 < self.slave_number:
@@ -424,10 +451,12 @@ class I2COverDistanceWrapper(I2CDriver):
                 f"Could not find slave {self.slave_number}. Switch status {self._get_switch_status(self._driver, self.transceiver_address):08b} ")
 
         with self.transaction():
-            self._select_node(broadcast=True)
+            if self._should_do_selection():
+                self._select_node(broadcast=True)
 
             try:
                 self._driver.write(self.bus_address, memory_address, data, memory_address_size=1)
 
             finally:
-                self._deselect_node()
+                if self._should_do_selection():
+                    self._deselect_node()

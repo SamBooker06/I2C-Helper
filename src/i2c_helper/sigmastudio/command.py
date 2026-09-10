@@ -7,7 +7,7 @@ from i2c_helper import I2CDriver
 
 class SequenceCommand(ABC, metaclass=ABCMeta):
     @abstractmethod
-    def execute(self) -> Optional[bytes]:
+    def execute(self, *, do_select: bool = True) -> Optional[bytes]:
         raise NotImplementedError()
 
 
