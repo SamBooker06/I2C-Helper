@@ -1,8 +1,10 @@
+from contextlib import nullcontext
 from enum import Enum
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 
 from i2c_helper import I2CDriver, I2COverDistanceWrapper
+from i2c_helper.i2c.bulk import BulkTransaction
 from i2c_helper.sigmastudio.command import SequenceCommand, NoOpCommand, DelayCommand, I2CWriteCommand, I2CReadCommand, \
     I2CCommand
 
@@ -140,19 +142,10 @@ class Sequence:
         return self.mode_type
 
     def execute(self) -> None:
-        distance_driver: Optional[I2COverDistanceWrapper] = None
+        driver = next((command.driver for command in self.commands if isinstance(command, I2CCommand)), None)
 
-        for command in self.commands:
-            if isinstance(command, I2CCommand):
-                if distance_driver is None and isinstance(command.driver, I2COverDistanceWrapper):
-                    distance_driver = command.driver
-                    # This will speed up a sequence over distance
-                    distance_driver.keep_current_node_selected()
+        transaction = BulkTransaction(driver) if driver is not None else nullcontext()
 
-                elif distance_driver is not None and distance_driver != command.driver:
-                    raise ValueError("Cannot have different drivers in same sequence")
-
-            command.execute()
-
-        if distance_driver:
-            distance_driver.deselect_node()
+        with transaction:
+            for command in self.commands:
+                command.execute()

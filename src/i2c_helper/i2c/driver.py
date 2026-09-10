@@ -258,6 +258,8 @@ class I2COverDistanceWrapper(I2CDriver):
     def deselect_node(self):
         self._should_keep_current_selection = False
 
+        self._deselect_node()
+
 
     def _should_do_selection(self):
         return not self._should_keep_current_selection or not self._is_node_selected
@@ -298,7 +300,6 @@ class I2COverDistanceWrapper(I2CDriver):
         return self._peripheral_reserved_bits[device_address]
 
     def _select_node(self, *, peripheral: bool = False, broadcast: bool = False) -> None:
-
         reserved_bits = self._get_node_reserved_bits()
 
         nodeadr_value = reserved_bits | A2B_NODEADR.NODE(
@@ -307,11 +308,15 @@ class I2COverDistanceWrapper(I2CDriver):
         self._driver.write(self.transceiver_address, A2B_NODEADR.address, nodeadr_value.to_bytes(1, "big"),
                            memory_address_size=1)
 
+        self._is_node_selected = True
+
     def _deselect_node(self) -> None:
         reserved_bits = self._get_node_reserved_bits()
 
         self._driver.write(self.transceiver_address, A2B_NODEADR.address, reserved_bits.to_bytes(1, "big"),
                            memory_address_size=1)
+
+        self._is_node_selected = False
 
     def _select_peripheral(self, device_address: int) -> None:
         self._select_node()
@@ -345,8 +350,6 @@ class I2COverDistanceWrapper(I2CDriver):
         with self.transaction():
             if self._should_do_selection():
                 self._select_peripheral(device_address)
-                self._is_node_selected = True
-
             try:
                 result = self._driver.read(self.bus_address, memory_address, buffer_size=buffer_size,
                                            memory_address_size=memory_address_size)
