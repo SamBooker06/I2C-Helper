@@ -149,7 +149,7 @@ class Sequence:
                     # This will speed up a sequence over distance
                     distance_driver.keep_current_node_selected()
 
-                elif distance_driver != command.driver:
+                elif distance_driver is not None and distance_driver != command.driver:
                     raise ValueError("Cannot have different drivers in same sequence")
 
             command.execute()
