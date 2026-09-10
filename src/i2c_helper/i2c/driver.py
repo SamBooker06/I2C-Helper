@@ -1,5 +1,6 @@
 import functools
 from abc import ABC, abstractmethod
+from enum import Enum
 from threading import RLock
 from typing import Optional
 
@@ -102,6 +103,11 @@ class I2CDriver(ABC):
         raise NotImplementedError()
 
 
+class GPIODirection(Enum):
+    Input = 0
+    Output = 1
+
+
 class MCP2221Driver(I2CDriver):
     """
     Driver for interacting with I2C devices using the MCP2221 chip.
@@ -124,6 +130,16 @@ class MCP2221Driver(I2CDriver):
             raise OSError("Could not connect to MCP2221. Is it connected?")
 
         self._rlock = RLock()
+
+    def set_gpio_pin(self, pin: int, is_on: bool) -> None:
+        self._mcp2221.gpio_set_pin(pin, is_on)
+
+    def set_gpio_pin_direction(self, pin: int, direction: GPIODirection):
+        is_input = direction == GPIODirection.Input
+        self._mcp2221.gpio_set_direction(pin, is_input)
+
+    def read_gpio_pin(self, pin: int) -> bool:
+        return bool(self._mcp2221.gpio_get_pin(pin))
 
     def transaction(self) -> RLock:
         return self._rlock
