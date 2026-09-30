@@ -10,15 +10,15 @@
 
 ## Repository contents
 
-- `/home/runner/work/I2C-Helper/I2C-Helper/src/i2c_helper/i2c/driver.py`  
+- `src/i2c_helper/i2c/driver.py`  
   Driver abstractions, MCP2221 implementation, and A2B wrapper logic.
-- `/home/runner/work/I2C-Helper/I2C-Helper/src/i2c_helper/i2c/device.py`  
+- `src/i2c_helper/i2c/device.py`  
   Device-level convenience API for memory-addressed and direct I2C access.
-- `/home/runner/work/I2C-Helper/I2C-Helper/src/i2c_helper/i2c/bulk.py`  
+- `src/i2c_helper/i2c/bulk.py`  
   Context manager that keeps the transaction lock and node selection stable.
-- `/home/runner/work/I2C-Helper/I2C-Helper/src/i2c_helper/sigmastudio/`  
+- `src/i2c_helper/sigmastudio/`  
   SigmaStudio command and sequence parsing/execution support.
-- `/home/runner/work/I2C-Helper/I2C-Helper/src/i2c_helper/registers/`  
+- `src/i2c_helper/registers/`  
   Register constants and masks used by the A2B wrapper.
 
 ## Installation
@@ -70,4 +70,4 @@ for sequence in sequences:
 
 ## Developer documentation
 
-See `/home/runner/work/I2C-Helper/I2C-Helper/docs/developer.md` for development setup, packaging, and release details.
+See `docs/developer.md` for development setup, packaging, and release details.
